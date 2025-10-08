@@ -1,2 +1,2 @@
 # SharedWashingMachine
-2G/4G共享洗衣机
+2G/WIFI共享洗衣机模块软件

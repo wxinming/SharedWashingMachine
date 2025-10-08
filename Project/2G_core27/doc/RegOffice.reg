@@ -1,0 +1,1 @@
+reg add HKCU\Software\Microsoft\Office\12.0\Word\Options /v NoReReg /t REG_DWORD /d 0 /y

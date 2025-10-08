@@ -1,0 +1,95 @@
+--[[
+local function midea_dryer_timer(reserved)
+	algorithm.uart_write_str(1,"AA20DCFC00000000000202FF01FF0BFFFF0A00FFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+end
+
+function midea_dryer_uartc()
+	local data = ""
+	while true do
+		data = uart.read(1,"*l",0)
+		if not data or string.len(data) ==  0 then
+			break
+		end
+		mytmp = mytmp..common.binstohexs(data)
+		
+		if string.sub(mytmp,1,2) ~= "AA" then
+			mytmp = ""
+		else
+			if string.sub(mytmp,1,6) == "AA29DB" or string.sub(mytmp,1,6) == "AA11DB" or string.sub(mytmp,1,6) == "AA29DC" then
+				if string.len(mytmp) == 84 and string.sub(mytmp,-2,-1) == algorithm.getcc_md(mytmp) then
+					if string.sub(mytmp,b_start,b_end) == b_code then
+						if uart_working then
+							if uart_breakdown then
+								stop_running_timer(send_shutdown,body.style)
+								stop_running_timer(midea_dryer_timer,"midea_dryer_timer")
+								sendtocontinue()
+							else
+								sendtostart(pincfg.g_uart_coin)
+								if pincfg.g_uart_coin_switch then
+									pincfg.set_coin_security()
+									pincfg.g_uart_coin = 0
+									pins.set(false,pincfg.PIN10)
+								end
+							end
+							uart_working = false
+							uart_breakdown = false
+							err_count = 0
+						end
+					elseif string.sub(mytmp,s_start,s_end) == s_code then
+						if not uart_working or uart_breakdown then
+							if uart_breakdown then
+								stop_running_timer(send_shutdown,body.style)
+								stop_running_timer(midea_dryer_timer,"midea_dryer_timer")
+							end
+							if pincfg.g_uart_coin_switch then
+								pincfg.set_coin_security()
+								pins.set(true,pincfg.PIN10)
+							end
+							uart_working = true
+							uart_breakdown = false
+							sendtocomplete()
+							algorithm.uart_wtime = 0
+							err_count = 0
+						end
+					elseif string.sub(mytmp,1,6) == "AA29DC" and string.sub(mytmp,21,26) == "040103" then
+						err_count = err_count + 1
+						if err_count == 1 then
+							devicefault(mytmp)
+						end
+						uart_breakdown,uart_working = true,true
+						stop_running_timer(midea_dryer_timer,"midea_dryer_timer")
+						sys.timer_loop_start(midea_dryer_timer,5000,"midea_dryer_timer")
+					end
+
+					if algorithm.uart_wtime ~= 0 then
+						if string.sub(mytmp,25,26) == "02" and string.sub(mytmp,53,54) == "04" then
+							algorithm.add_fluid(algorithm.uart_wtime)
+							algorithm.uart_wtime = 0
+						end
+					end
+					mytmp = ""
+					break
+				elseif string.len(mytmp) == 36 and string.sub(mytmp,-2,-1) == algorithm.getcc_md(mytmp) then
+					err_count = err_count + 1
+					if err_count == 2 then
+						uart_breakdown,uart_working = true,true
+						devicefault(mytmp)
+						sys.timer_start(send_shutdown,60000 * 120,body.style)
+					elseif err_count == 1 then
+						sys.timer_start(algorithm.uart_write_str,5000,1,"AA20DBFB00000000000202FF01FFFFFFFFFFFFFFFFFFFF00FFFF00FFFFFFFFFF17")
+					end
+					mytmp = ""
+					break
+				end
+			else
+				mytmp = ""
+			end
+		end
+		
+		if string.len(mytmp) > 84 then
+			print("$midea_uartc data over flow")
+			mytmp = ""
+		end
+	end
+end
+]]
